@@ -3,7 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import requests
 import validators
 from io import BytesIO
-from yt_dlp import YoutubeDL 
+from yt_dlp import YoutubeDL
 import os
 
 async def getimage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,24 +34,38 @@ async def getvideo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     
     url = context.args[0]
-    await update.message.reply_text("Downloading...")
     if not validators.url(url):
         await update.message.reply_text("The provided string is not a valid URL.")
         return
     
-    output_template = '%(title)s.%(ext)s'
+    await update.message.reply_text("Downloading...")
     ydl_opts = {
-        'format':'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4',
-        'merge_output_format':'mp4',
-        'outtmpl' : output_template
+        'format': 'bestvideo+bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4'
+        }],
+        'outtmpl': 'video',
+        'noplaylist': True
     }
 
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-        info_dict = ydl.extract_info(url, download=False)
-        filename = ydl.prepare_filename(info_dict)
-        await update.message.reply_video(video=open(filename,'rb'))
-        os.remove(filename)
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    await update.message.reply_video(video=open('video.mp4', 'rb'))
+                    break
+                except Exception:
+                    if attempt < max_attempts - 1:
+                        await update.message.reply_text("Timeout occurred, retrying...")
+                    else:
+                        await update.message.reply_text("Failed to upload video after several attempts. Adjust timeout or try smaller video.")
+            os.remove('video.mp4')
+    except Exception:
+        await update.message.reply_text("Failed to download video.")
+
 
 
 token = '7166179712:AAHxerkHQIk8MPe35ik8AmvCeU4zXGd9rRI'
@@ -61,4 +75,3 @@ app.add_handler(CommandHandler("getimage", getimage, has_args=True))
 app.add_handler(CommandHandler("getvideo", getvideo, has_args=True))
 
 app.run_polling()
-
